@@ -35,7 +35,7 @@ public class EngineeringRequestsController<TDbContext> : ControllerBase where TD
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateRequest(UpsertEngineeringRequestDto dto, CancellationToken cancellationToken)
+    public async Task<ActionResult> CreateRequest([FromBody] UpsertEngineeringRequestDto dto, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.Title) || string.IsNullOrWhiteSpace(dto.SystemName))
         {
@@ -49,7 +49,7 @@ public class EngineeringRequestsController<TDbContext> : ControllerBase where TD
     [HttpPut("{id:int}")]
     public async Task<ActionResult> UpdateRequest(
         int id,
-        UpsertEngineeringRequestDto dto,
+        [FromBody] UpsertEngineeringRequestDto dto,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.Title) || string.IsNullOrWhiteSpace(dto.SystemName))
@@ -71,7 +71,7 @@ public class EngineeringRequestsController<TDbContext> : ControllerBase where TD
     [HttpPost("{id:int}/notes")]
     public async Task<ActionResult<RequestNoteDto>> AddNote(
         int id,
-        AddRequestNoteDto dto,
+        [FromBody] AddRequestNoteDto dto,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(dto.NoteText))
@@ -83,9 +83,82 @@ public class EngineeringRequestsController<TDbContext> : ControllerBase where TD
         return note is null ? NotFound() : Ok(note);
     }
 
+    [HttpPost("{id:int}/attachments")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<ActionResult<RequestAttachmentDto>> UploadAttachment(
+        int id,
+        IFormFile file,
+        [FromForm] string? uploadedBy,
+        CancellationToken cancellationToken)
+    {
+        if (file is null)
+        {
+            return BadRequest("File is required.");
+        }
+
+        try
+        {
+            var attachment = await _service.AddAttachmentAsync(id, file, uploadedBy, cancellationToken);
+            return attachment is null ? NotFound() : Ok(attachment);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpGet("attachments/{attachmentId:int}")]
+    public async Task<IActionResult> DownloadAttachment(int attachmentId, CancellationToken cancellationToken)
+    {
+        var attachment = await _service.GetAttachmentEntityAsync(attachmentId, cancellationToken);
+        if (attachment is null || !System.IO.File.Exists(attachment.FilePath))
+        {
+            return NotFound();
+        }
+
+        var stream = System.IO.File.OpenRead(attachment.FilePath);
+        return File(stream, attachment.ContentType ?? "application/octet-stream", attachment.FileName);
+    }
+
+    [HttpPost("{id:int}/runbooks")]
+    public async Task<ActionResult<LinkedRunbookDto>> LinkRunbook(
+        int id,
+        [FromBody] LinkRunbookDto dto,
+        [FromQuery] string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var linked = await _service.LinkRunbookAsync(id, dto.RunbookId, changedBy, cancellationToken);
+        return linked is null ? NotFound() : Ok(linked);
+    }
+
+    [HttpDelete("{id:int}/runbooks/{runbookId:int}")]
+    public async Task<ActionResult> UnlinkRunbook(
+        int id,
+        int runbookId,
+        [FromQuery] string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var unlinked = await _service.UnlinkRunbookAsync(id, runbookId, changedBy, cancellationToken);
+        return unlinked ? NoContent() : NotFound();
+    }
+
     [HttpGet("summary")]
     public async Task<ActionResult<RequestDashboardSummaryDto>> GetSummary(CancellationToken cancellationToken)
     {
         return Ok(await _service.GetDashboardSummaryAsync(cancellationToken));
+    }
+
+    [HttpGet("reporting")]
+    public async Task<ActionResult<RequestReportingDashboardDto>> GetReportingDashboard(
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        [FromQuery] string? system,
+        [FromQuery] RequestPriority? priority,
+        [FromQuery] RequestStatus? status,
+        [FromQuery] RequestType? type,
+        CancellationToken cancellationToken)
+    {
+        var filters = new RequestReportingFilterDto(fromDate, toDate, system, priority, status, type);
+        return Ok(await _service.GetReportingDashboardAsync(filters, cancellationToken));
     }
 }

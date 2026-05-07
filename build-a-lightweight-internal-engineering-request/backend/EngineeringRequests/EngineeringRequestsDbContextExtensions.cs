@@ -51,5 +51,70 @@ public static class EngineeringRequestsDbContextExtensions
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.RequestId, x.CreatedDate });
         });
+
+        modelBuilder.Entity<RequestAttachment>(entity =>
+        {
+            entity.ToTable("RequestAttachments");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.FileName).HasMaxLength(260).IsRequired();
+            entity.Property(x => x.StoredFileName).HasMaxLength(260).IsRequired();
+            entity.Property(x => x.FilePath).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.ContentType).HasMaxLength(120);
+            entity.Property(x => x.UploadedBy).HasMaxLength(120);
+            entity.HasOne(x => x.Request)
+                .WithMany(x => x.Attachments)
+                .HasForeignKey(x => x.RequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.RequestId, x.UploadedDate });
+        });
+
+        modelBuilder.Entity<RequestHistory>(entity =>
+        {
+            entity.ToTable("RequestHistory");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ActionType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.OldValue).HasMaxLength(500);
+            entity.Property(x => x.NewValue).HasMaxLength(500);
+            entity.Property(x => x.ChangedBy).HasMaxLength(120);
+            entity.HasOne(x => x.Request)
+                .WithMany(x => x.History)
+                .HasForeignKey(x => x.RequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.RequestId, x.ChangedDate });
+        });
+
+        modelBuilder.Entity<Runbook>(entity =>
+        {
+            entity.ToTable("Runbooks");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.SystemName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Category).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Symptoms).HasMaxLength(4000);
+            entity.Property(x => x.Cause).HasMaxLength(4000);
+            entity.Property(x => x.ResolutionSteps).HasMaxLength(8000);
+            entity.Property(x => x.VerificationSteps).HasMaxLength(4000);
+            entity.Property(x => x.KnownRisks).HasMaxLength(4000);
+            entity.Property(x => x.Notes).HasMaxLength(4000);
+            entity.HasIndex(x => x.SystemName);
+            entity.HasIndex(x => x.Category);
+            entity.HasIndex(x => x.UpdatedDate);
+        });
+
+        modelBuilder.Entity<RequestRunbook>(entity =>
+        {
+            entity.ToTable("RequestRunbooks");
+            entity.HasKey(x => x.Id);
+            entity.HasOne(x => x.Request)
+                .WithMany(x => x.RequestRunbooks)
+                .HasForeignKey(x => x.RequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.Runbook)
+                .WithMany(x => x.RequestRunbooks)
+                .HasForeignKey(x => x.RunbookId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.RequestId, x.RunbookId }).IsUnique();
+            entity.HasIndex(x => x.RunbookId);
+        });
     }
 }

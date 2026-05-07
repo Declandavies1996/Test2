@@ -26,6 +26,19 @@ export const engineeringRequestsApi = {
     return requestJson(`${baseUrl}/engineering-requests/summary`);
   },
 
+  getReportingDashboard(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.fromDate) params.set('fromDate', filters.fromDate);
+    if (filters.toDate) params.set('toDate', filters.toDate);
+    if (filters.system) params.set('system', filters.system);
+    if (filters.priority) params.set('priority', filters.priority);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.type) params.set('type', filters.type);
+
+    const query = params.toString();
+    return requestJson(`${baseUrl}/engineering-requests/reporting${query ? `?${query}` : ''}`);
+  },
+
   getRequests(filters = {}) {
     const params = new URLSearchParams();
     if (filters.search) params.set('search', filters.search);
@@ -67,6 +80,27 @@ export const engineeringRequestsApi = {
     });
   },
 
+  uploadAttachment(requestId, file, uploadedBy) {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (uploadedBy) formData.append('uploadedBy', uploadedBy);
+
+    return fetch(`${baseUrl}/engineering-requests/${requestId}/attachments`, {
+      method: 'POST',
+      body: formData
+    }).then(async response => {
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Upload failed: ${response.status}`);
+      }
+      return response.json();
+    });
+  },
+
+  attachmentUrl(attachmentId) {
+    return `${baseUrl}/engineering-requests/attachments/${attachmentId}`;
+  },
+
   getSystems() {
     return requestJson(`${baseUrl}/engineering-systems`);
   },
@@ -87,6 +121,61 @@ export const engineeringRequestsApi = {
 
   deleteSystem(id) {
     return requestJson(`${baseUrl}/engineering-systems/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  getRunbooks(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search);
+    if (filters.system) params.set('system', filters.system);
+    if (filters.category) params.set('category', filters.category);
+
+    const query = params.toString();
+    return requestJson(`${baseUrl}/runbooks${query ? `?${query}` : ''}`);
+  },
+
+  getRunbook(id) {
+    return requestJson(`${baseUrl}/runbooks/${id}`);
+  },
+
+  createRunbook(payload) {
+    return requestJson(`${baseUrl}/runbooks`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  updateRunbook(id, payload) {
+    return requestJson(`${baseUrl}/runbooks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  deleteRunbook(id) {
+    return requestJson(`${baseUrl}/runbooks/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  linkRunbookToRequest(requestId, runbookId, changedBy) {
+    const params = new URLSearchParams();
+    if (changedBy) params.set('changedBy', changedBy);
+    const query = params.toString();
+
+    return requestJson(`${baseUrl}/engineering-requests/${requestId}/runbooks${query ? `?${query}` : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ runbookId })
+    });
+  },
+
+  unlinkRunbookFromRequest(requestId, runbookId, changedBy) {
+    const params = new URLSearchParams();
+    if (changedBy) params.set('changedBy', changedBy);
+    const query = params.toString();
+
+    return requestJson(`${baseUrl}/engineering-requests/${requestId}/runbooks/${runbookId}${query ? `?${query}` : ''}`, {
       method: 'DELETE'
     });
   }

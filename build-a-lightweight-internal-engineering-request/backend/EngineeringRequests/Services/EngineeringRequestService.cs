@@ -1,20 +1,28 @@
 using CaeDashboard.EngineeringRequests.Dtos;
 using CaeDashboard.EngineeringRequests.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CaeDashboard.EngineeringRequests.Services;
 
 public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
 {
     private readonly TDbContext _db;
+    private readonly EngineeringRequestUploadOptions _uploadOptions;
 
-    public EngineeringRequestService(TDbContext db)
+    public EngineeringRequestService(TDbContext db, IOptions<EngineeringRequestUploadOptions> uploadOptions)
     {
         _db = db;
+        _uploadOptions = uploadOptions.Value;
     }
 
     private DbSet<EngineeringRequest> Requests => _db.Set<EngineeringRequest>();
     private DbSet<RequestNote> RequestNotes => _db.Set<RequestNote>();
+    private DbSet<RequestAttachment> RequestAttachments => _db.Set<RequestAttachment>();
+    private DbSet<RequestHistory> RequestHistory => _db.Set<RequestHistory>();
+    private DbSet<RequestRunbook> RequestRunbooks => _db.Set<RequestRunbook>();
+    private DbSet<Runbook> Runbooks => _db.Set<Runbook>();
 
     public async Task<IReadOnlyList<EngineeringRequestListItemDto>> GetRequestsAsync(
         string? search,
@@ -83,6 +91,39 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
                 x.RequestNotes
                     .OrderByDescending(n => n.CreatedDate)
                     .Select(n => new RequestNoteDto(n.Id, n.RequestId, n.NoteText, n.CreatedBy, n.CreatedDate))
+                    .ToList(),
+                x.Attachments
+                    .OrderByDescending(a => a.UploadedDate)
+                    .Select(a => new RequestAttachmentDto(
+                        a.Id,
+                        a.RequestId,
+                        a.FileName,
+                        a.StoredFileName,
+                        a.FilePath,
+                        a.ContentType,
+                        a.UploadedBy,
+                        a.UploadedDate))
+                    .ToList(),
+                x.History
+                    .OrderByDescending(h => h.ChangedDate)
+                    .Select(h => new RequestHistoryDto(
+                        h.Id,
+                        h.RequestId,
+                        h.ActionType,
+                        h.OldValue,
+                        h.NewValue,
+                        h.ChangedBy,
+                        h.ChangedDate))
+                    .ToList(),
+                x.RequestRunbooks
+                    .OrderByDescending(r => r.LinkedDate)
+                    .Select(r => new LinkedRunbookDto(
+                        r.Id,
+                        r.RunbookId,
+                        r.Runbook != null ? r.Runbook.Title : string.Empty,
+                        r.Runbook != null ? r.Runbook.SystemName : string.Empty,
+                        r.Runbook != null ? r.Runbook.Category : RunbookCategory.Other,
+                        r.LinkedDate))
                     .ToList()))
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -107,6 +148,17 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
 
         Requests.Add(request);
         await _db.SaveChangesAsync(cancellationToken);
+
+        RequestHistory.Add(new RequestHistory
+        {
+            RequestId = request.Id,
+            ActionType = "RequestCreated",
+            NewValue = request.Title,
+            ChangedBy = dto.RequestedBy,
+            ChangedDate = now
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+
         return request.Id;
     }
 
@@ -118,6 +170,9 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
             return false;
         }
 
+        var oldStatus = request.Status;
+        var oldPriority = request.Priority;
+
         request.Title = dto.Title.Trim();
         request.Description = dto.Description;
         request.SystemName = dto.SystemName.Trim();
@@ -128,6 +183,32 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
         request.Type = dto.Type;
         request.Notes = dto.Notes;
         request.UpdatedDate = DateTime.UtcNow;
+
+        if (oldStatus != request.Status)
+        {
+            RequestHistory.Add(new RequestHistory
+            {
+                RequestId = request.Id,
+                ActionType = "StatusChanged",
+                OldValue = oldStatus.ToString(),
+                NewValue = request.Status.ToString(),
+                ChangedBy = dto.RequestedBy,
+                ChangedDate = request.UpdatedDate
+            });
+        }
+
+        if (oldPriority != request.Priority)
+        {
+            RequestHistory.Add(new RequestHistory
+            {
+                RequestId = request.Id,
+                ActionType = "PriorityChanged",
+                OldValue = oldPriority.ToString(),
+                NewValue = request.Priority.ToString(),
+                ChangedBy = dto.RequestedBy,
+                ChangedDate = request.UpdatedDate
+            });
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
         return true;
@@ -164,9 +245,181 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
 
         request.UpdatedDate = DateTime.UtcNow;
         RequestNotes.Add(note);
+        RequestHistory.Add(new RequestHistory
+        {
+            RequestId = requestId,
+            ActionType = "NoteAdded",
+            NewValue = note.NoteText.Length > 250 ? note.NoteText[..250] : note.NoteText,
+            ChangedBy = dto.CreatedBy,
+            ChangedDate = note.CreatedDate
+        });
         await _db.SaveChangesAsync(cancellationToken);
 
         return new RequestNoteDto(note.Id, note.RequestId, note.NoteText, note.CreatedBy, note.CreatedDate);
+    }
+
+    public async Task<RequestAttachmentDto?> AddAttachmentAsync(
+        int requestId,
+        IFormFile file,
+        string? uploadedBy,
+        CancellationToken cancellationToken)
+    {
+        var request = await Requests.FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+        if (request is null)
+        {
+            return null;
+        }
+
+        if (file.Length == 0 || file.Length > _uploadOptions.MaxFileSizeBytes)
+        {
+            throw new InvalidOperationException("File is empty or exceeds the allowed upload size.");
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!_uploadOptions.AllowedExtensions.Contains(extension))
+        {
+            throw new InvalidOperationException("This file type is not allowed.");
+        }
+
+        var requestFolder = Path.Combine(_uploadOptions.RootPath, requestId.ToString());
+        Directory.CreateDirectory(requestFolder);
+
+        var storedFileName = $"{Guid.NewGuid():N}{extension}";
+        var storedPath = Path.Combine(requestFolder, storedFileName);
+
+        await using (var stream = File.Create(storedPath))
+        {
+            await file.CopyToAsync(stream, cancellationToken);
+        }
+
+        var now = DateTime.UtcNow;
+        var attachment = new RequestAttachment
+        {
+            RequestId = requestId,
+            FileName = Path.GetFileName(file.FileName),
+            StoredFileName = storedFileName,
+            FilePath = storedPath,
+            ContentType = file.ContentType,
+            UploadedBy = uploadedBy,
+            UploadedDate = now
+        };
+
+        request.UpdatedDate = now;
+        RequestAttachments.Add(attachment);
+        RequestHistory.Add(new RequestHistory
+        {
+            RequestId = requestId,
+            ActionType = "AttachmentUploaded",
+            NewValue = attachment.FileName,
+            ChangedBy = uploadedBy,
+            ChangedDate = now
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new RequestAttachmentDto(
+            attachment.Id,
+            attachment.RequestId,
+            attachment.FileName,
+            attachment.StoredFileName,
+            attachment.FilePath,
+            attachment.ContentType,
+            attachment.UploadedBy,
+            attachment.UploadedDate);
+    }
+
+    public async Task<RequestAttachment?> GetAttachmentEntityAsync(int id, CancellationToken cancellationToken)
+    {
+        return await RequestAttachments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    }
+
+    public async Task<LinkedRunbookDto?> LinkRunbookAsync(
+        int requestId,
+        int runbookId,
+        string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var request = await Requests.FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+        var runbook = await Runbooks.FirstOrDefaultAsync(x => x.Id == runbookId, cancellationToken);
+        if (request is null || runbook is null)
+        {
+            return null;
+        }
+
+        var existing = await RequestRunbooks
+            .FirstOrDefaultAsync(x => x.RequestId == requestId && x.RunbookId == runbookId, cancellationToken);
+        if (existing is not null)
+        {
+            return new LinkedRunbookDto(
+                existing.Id,
+                runbook.Id,
+                runbook.Title,
+                runbook.SystemName,
+                runbook.Category,
+                existing.LinkedDate);
+        }
+
+        var now = DateTime.UtcNow;
+        var link = new RequestRunbook
+        {
+            RequestId = requestId,
+            RunbookId = runbookId,
+            LinkedDate = now
+        };
+
+        request.UpdatedDate = now;
+        RequestRunbooks.Add(link);
+        RequestHistory.Add(new RequestHistory
+        {
+            RequestId = requestId,
+            ActionType = "RunbookLinked",
+            NewValue = runbook.Title,
+            ChangedBy = changedBy,
+            ChangedDate = now
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new LinkedRunbookDto(
+            link.Id,
+            runbook.Id,
+            runbook.Title,
+            runbook.SystemName,
+            runbook.Category,
+            link.LinkedDate);
+    }
+
+    public async Task<bool> UnlinkRunbookAsync(
+        int requestId,
+        int runbookId,
+        string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var link = await RequestRunbooks
+            .Include(x => x.Runbook)
+            .FirstOrDefaultAsync(x => x.RequestId == requestId && x.RunbookId == runbookId, cancellationToken);
+        if (link is null)
+        {
+            return false;
+        }
+
+        var request = await Requests.FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+        var now = DateTime.UtcNow;
+
+        if (request is not null)
+        {
+            request.UpdatedDate = now;
+        }
+
+        RequestRunbooks.Remove(link);
+        RequestHistory.Add(new RequestHistory
+        {
+            RequestId = requestId,
+            ActionType = "RunbookUnlinked",
+            OldValue = link.Runbook?.Title,
+            ChangedBy = changedBy,
+            ChangedDate = now
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<RequestDashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken)
@@ -196,5 +449,130 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
             .ToListAsync(cancellationToken);
 
         return new RequestDashboardSummaryDto(openP1Count, requestsThisWeek, bySystem, byType);
+    }
+
+    public async Task<RequestReportingDashboardDto> GetReportingDashboardAsync(
+        RequestReportingFilterDto filters,
+        CancellationToken cancellationToken)
+    {
+        var today = DateTime.UtcNow.Date;
+        var weekStart = today.AddDays(-6);
+        var toDateExclusive = filters.ToDate?.Date.AddDays(1);
+
+        var filteredRequests = Requests.AsNoTracking();
+
+        if (filters.FromDate is not null)
+        {
+            var fromDate = filters.FromDate.Value.Date;
+            filteredRequests = filteredRequests.Where(x => x.CreatedDate >= fromDate);
+        }
+
+        if (toDateExclusive is not null)
+        {
+            filteredRequests = filteredRequests.Where(x => x.CreatedDate < toDateExclusive);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filters.System))
+        {
+            filteredRequests = filteredRequests.Where(x => x.SystemName == filters.System);
+        }
+
+        if (filters.Priority is not null)
+        {
+            filteredRequests = filteredRequests.Where(x => x.Priority == filters.Priority);
+        }
+
+        if (filters.Status is not null)
+        {
+            filteredRequests = filteredRequests.Where(x => x.Status == filters.Status);
+        }
+
+        if (filters.Type is not null)
+        {
+            filteredRequests = filteredRequests.Where(x => x.Type == filters.Type);
+        }
+
+        var openRequests = filteredRequests.Where(x => x.Status != RequestStatus.Done);
+
+        var cards = new RequestReportingCardsDto(
+            await openRequests.CountAsync(x => x.Priority == RequestPriority.P1, cancellationToken),
+            await openRequests.CountAsync(x => x.Priority == RequestPriority.P2, cancellationToken),
+            await openRequests.CountAsync(cancellationToken),
+            await filteredRequests.CountAsync(x => x.CreatedDate >= weekStart, cancellationToken),
+            await filteredRequests.CountAsync(x => x.Status == RequestStatus.Done && x.UpdatedDate >= weekStart, cancellationToken),
+            await openRequests.CountAsync(x => x.Status == RequestStatus.Waiting, cancellationToken));
+
+        var openBySystem = await openRequests
+            .GroupBy(x => x.SystemName)
+            .Select(x => new OpenRequestsBySystemDto(
+                x.Key,
+                x.Count(),
+                x.Count(r => r.Priority == RequestPriority.P1),
+                x.Count(r => r.Priority == RequestPriority.P2)))
+            .OrderByDescending(x => x.P1Count)
+            .ThenByDescending(x => x.P2Count)
+            .ThenByDescending(x => x.OpenCount)
+            .ToListAsync(cancellationToken);
+
+        var requestsByType = await filteredRequests
+            .GroupBy(x => x.Type)
+            .Select(x => new RequestsByTypeDto(x.Key, x.Count()))
+            .ToListAsync(cancellationToken);
+
+        var existingTypes = requestsByType.Select(x => x.Type).ToHashSet();
+        var allTypes = Enum.GetValues<RequestType>()
+            .Where(x => !existingTypes.Contains(x))
+            .Select(x => new RequestsByTypeDto(x, 0));
+        requestsByType = requestsByType
+            .Concat(allTypes)
+            .OrderBy(x => x.Type)
+            .ToList();
+
+        var oldestOpenRequestRows = await openRequests
+            .OrderBy(x => x.CreatedDate)
+            .Take(10)
+            .Select(x => new
+            {
+                x.Id,
+                x.Title,
+                x.SystemName,
+                x.Priority,
+                x.Status,
+                x.CreatedDate
+            })
+            .ToListAsync(cancellationToken);
+
+        var oldestOpenRequests = oldestOpenRequestRows
+            .Select(x => new OldestOpenRequestDto(
+                x.Id,
+                x.Title,
+                x.SystemName,
+                x.Priority,
+                x.Status,
+                x.CreatedDate,
+                Math.Max(0, (today - x.CreatedDate.Date).Days)))
+            .ToList();
+
+        var waitingRequests = await openRequests
+            .Where(x => x.Status == RequestStatus.Waiting)
+            .OrderBy(x => x.UpdatedDate)
+            .Take(20)
+            .Select(x => new WaitingRequestDto(
+                x.Id,
+                x.Title,
+                x.SystemName,
+                x.RequestNotes
+                    .OrderByDescending(n => n.CreatedDate)
+                    .Select(n => n.NoteText)
+                    .FirstOrDefault(),
+                x.UpdatedDate))
+            .ToListAsync(cancellationToken);
+
+        return new RequestReportingDashboardDto(
+            cards,
+            openBySystem,
+            requestsByType,
+            oldestOpenRequests,
+            waitingRequests);
     }
 }

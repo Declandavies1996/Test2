@@ -29,7 +29,10 @@ public record EngineeringRequestDetailDto(
     DateTime CreatedDate,
     DateTime UpdatedDate,
     string? Notes,
-    IReadOnlyList<RequestNoteDto> RequestNotes);
+    IReadOnlyList<RequestNoteDto> RequestNotes,
+    IReadOnlyList<RequestAttachmentDto> Attachments,
+    IReadOnlyList<RequestHistoryDto> History,
+    IReadOnlyList<LinkedRunbookDto> LinkedRunbooks);
 
 public record UpsertEngineeringRequestDto(
     string Title,
@@ -51,6 +54,25 @@ public record RequestNoteDto(
 
 public record AddRequestNoteDto(string NoteText, string? CreatedBy);
 
+public record RequestAttachmentDto(
+    int Id,
+    int RequestId,
+    string FileName,
+    string StoredFileName,
+    string FilePath,
+    string? ContentType,
+    string? UploadedBy,
+    DateTime UploadedDate);
+
+public record RequestHistoryDto(
+    int Id,
+    int RequestId,
+    string ActionType,
+    string? OldValue,
+    string? NewValue,
+    string? ChangedBy,
+    DateTime ChangedDate);
+
 public record RequestDashboardSummaryDto(
     int OpenP1Count,
     int RequestsThisWeek,
@@ -58,3 +80,52 @@ public record RequestDashboardSummaryDto(
     IReadOnlyList<GroupCountDto> RequestsByType);
 
 public record GroupCountDto(string Name, int Count);
+
+public record RequestReportingFilterDto(
+    DateTime? FromDate,
+    DateTime? ToDate,
+    string? System,
+    RequestPriority? Priority,
+    RequestStatus? Status,
+    RequestType? Type);
+
+public record RequestReportingDashboardDto(
+    RequestReportingCardsDto Cards,
+    IReadOnlyList<OpenRequestsBySystemDto> OpenRequestsBySystem,
+    IReadOnlyList<RequestsByTypeDto> RequestsByType,
+    IReadOnlyList<OldestOpenRequestDto> OldestOpenRequests,
+    IReadOnlyList<WaitingRequestDto> WaitingRequests);
+
+public record RequestReportingCardsDto(
+    int OpenP1Requests,
+    int OpenP2Requests,
+    int TotalOpenRequests,
+    int RequestsCreatedThisWeek,
+    int RequestsCompletedThisWeek,
+    int RequestsWaitingBlocked);
+
+public record OpenRequestsBySystemDto(
+    string SystemName,
+    int OpenCount,
+    int P1Count,
+    int P2Count);
+
+public record RequestsByTypeDto(
+    RequestType Type,
+    int Count);
+
+public record OldestOpenRequestDto(
+    int Id,
+    string Title,
+    string SystemName,
+    RequestPriority Priority,
+    RequestStatus Status,
+    DateTime CreatedDate,
+    int AgeInDays);
+
+public record WaitingRequestDto(
+    int Id,
+    string Title,
+    string SystemName,
+    string? Reason,
+    DateTime UpdatedDate);

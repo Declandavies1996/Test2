@@ -19,4 +19,7 @@ public class EngineeringRequest
     public string? Notes { get; set; }
 
     public ICollection<RequestNote> RequestNotes { get; set; } = new List<RequestNote>();
+    public ICollection<RequestAttachment> Attachments { get; set; } = new List<RequestAttachment>();
+    public ICollection<RequestHistory> History { get; set; } = new List<RequestHistory>();
+    public ICollection<RequestRunbook> RequestRunbooks { get; set; } = new List<RequestRunbook>();
 }
