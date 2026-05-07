@@ -21,6 +21,8 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
     private DbSet<RequestNote> RequestNotes => _db.Set<RequestNote>();
     private DbSet<RequestAttachment> RequestAttachments => _db.Set<RequestAttachment>();
     private DbSet<RequestHistory> RequestHistory => _db.Set<RequestHistory>();
+    private DbSet<RequestRunbook> RequestRunbooks => _db.Set<RequestRunbook>();
+    private DbSet<Runbook> Runbooks => _db.Set<Runbook>();
 
     public async Task<IReadOnlyList<EngineeringRequestListItemDto>> GetRequestsAsync(
         string? search,
@@ -112,6 +114,16 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
                         h.NewValue,
                         h.ChangedBy,
                         h.ChangedDate))
+                    .ToList(),
+                x.RequestRunbooks
+                    .OrderByDescending(r => r.LinkedDate)
+                    .Select(r => new LinkedRunbookDto(
+                        r.Id,
+                        r.RunbookId,
+                        r.Runbook != null ? r.Runbook.Title : string.Empty,
+                        r.Runbook != null ? r.Runbook.SystemName : string.Empty,
+                        r.Runbook != null ? r.Runbook.Category : RunbookCategory.Other,
+                        r.LinkedDate))
                     .ToList()))
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -318,6 +330,96 @@ public class EngineeringRequestService<TDbContext> where TDbContext : DbContext
     public async Task<RequestAttachment?> GetAttachmentEntityAsync(int id, CancellationToken cancellationToken)
     {
         return await RequestAttachments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    }
+
+    public async Task<LinkedRunbookDto?> LinkRunbookAsync(
+        int requestId,
+        int runbookId,
+        string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var request = await Requests.FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+        var runbook = await Runbooks.FirstOrDefaultAsync(x => x.Id == runbookId, cancellationToken);
+        if (request is null || runbook is null)
+        {
+            return null;
+        }
+
+        var existing = await RequestRunbooks
+            .FirstOrDefaultAsync(x => x.RequestId == requestId && x.RunbookId == runbookId, cancellationToken);
+        if (existing is not null)
+        {
+            return new LinkedRunbookDto(
+                existing.Id,
+                runbook.Id,
+                runbook.Title,
+                runbook.SystemName,
+                runbook.Category,
+                existing.LinkedDate);
+        }
+
+        var now = DateTime.UtcNow;
+        var link = new RequestRunbook
+        {
+            RequestId = requestId,
+            RunbookId = runbookId,
+            LinkedDate = now
+        };
+
+        request.UpdatedDate = now;
+        RequestRunbooks.Add(link);
+        RequestHistory.Add(new RequestHistory
+        {
+            RequestId = requestId,
+            ActionType = "RunbookLinked",
+            NewValue = runbook.Title,
+            ChangedBy = changedBy,
+            ChangedDate = now
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new LinkedRunbookDto(
+            link.Id,
+            runbook.Id,
+            runbook.Title,
+            runbook.SystemName,
+            runbook.Category,
+            link.LinkedDate);
+    }
+
+    public async Task<bool> UnlinkRunbookAsync(
+        int requestId,
+        int runbookId,
+        string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var link = await RequestRunbooks
+            .Include(x => x.Runbook)
+            .FirstOrDefaultAsync(x => x.RequestId == requestId && x.RunbookId == runbookId, cancellationToken);
+        if (link is null)
+        {
+            return false;
+        }
+
+        var request = await Requests.FirstOrDefaultAsync(x => x.Id == requestId, cancellationToken);
+        var now = DateTime.UtcNow;
+
+        if (request is not null)
+        {
+            request.UpdatedDate = now;
+        }
+
+        RequestRunbooks.Remove(link);
+        RequestHistory.Add(new RequestHistory
+        {
+            RequestId = requestId,
+            ActionType = "RunbookUnlinked",
+            OldValue = link.Runbook?.Title,
+            ChangedBy = changedBy,
+            ChangedDate = now
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<RequestDashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken)

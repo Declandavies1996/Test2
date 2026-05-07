@@ -12,6 +12,7 @@ public static class EngineeringRequestsRegistration
         services.Configure<EngineeringRequestUploadOptions>(_ => { });
         services.AddScoped<EngineeringRequestService<TDbContext>>();
         services.AddScoped<EngineeringSystemService<TDbContext>>();
+        services.AddScoped<RunbookService<TDbContext>>();
         return services;
     }
 }

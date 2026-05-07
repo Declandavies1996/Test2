@@ -120,6 +120,28 @@ public class EngineeringRequestsController<TDbContext> : ControllerBase where TD
         return File(stream, attachment.ContentType ?? "application/octet-stream", attachment.FileName);
     }
 
+    [HttpPost("{id:int}/runbooks")]
+    public async Task<ActionResult<LinkedRunbookDto>> LinkRunbook(
+        int id,
+        [FromBody] LinkRunbookDto dto,
+        [FromQuery] string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var linked = await _service.LinkRunbookAsync(id, dto.RunbookId, changedBy, cancellationToken);
+        return linked is null ? NotFound() : Ok(linked);
+    }
+
+    [HttpDelete("{id:int}/runbooks/{runbookId:int}")]
+    public async Task<ActionResult> UnlinkRunbook(
+        int id,
+        int runbookId,
+        [FromQuery] string? changedBy,
+        CancellationToken cancellationToken)
+    {
+        var unlinked = await _service.UnlinkRunbookAsync(id, runbookId, changedBy, cancellationToken);
+        return unlinked ? NoContent() : NotFound();
+    }
+
     [HttpGet("summary")]
     public async Task<ActionResult<RequestDashboardSummaryDto>> GetSummary(CancellationToken cancellationToken)
     {

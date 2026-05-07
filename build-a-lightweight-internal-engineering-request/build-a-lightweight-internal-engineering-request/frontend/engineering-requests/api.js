@@ -110,5 +110,60 @@ export const engineeringRequestsApi = {
     return requestJson(`${baseUrl}/engineering-systems/${id}`, {
       method: 'DELETE'
     });
+  },
+
+  getRunbooks(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search);
+    if (filters.system) params.set('system', filters.system);
+    if (filters.category) params.set('category', filters.category);
+
+    const query = params.toString();
+    return requestJson(`${baseUrl}/runbooks${query ? `?${query}` : ''}`);
+  },
+
+  getRunbook(id) {
+    return requestJson(`${baseUrl}/runbooks/${id}`);
+  },
+
+  createRunbook(payload) {
+    return requestJson(`${baseUrl}/runbooks`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  updateRunbook(id, payload) {
+    return requestJson(`${baseUrl}/runbooks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  deleteRunbook(id) {
+    return requestJson(`${baseUrl}/runbooks/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  linkRunbookToRequest(requestId, runbookId, changedBy) {
+    const params = new URLSearchParams();
+    if (changedBy) params.set('changedBy', changedBy);
+    const query = params.toString();
+
+    return requestJson(`${baseUrl}/engineering-requests/${requestId}/runbooks${query ? `?${query}` : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ runbookId })
+    });
+  },
+
+  unlinkRunbookFromRequest(requestId, runbookId, changedBy) {
+    const params = new URLSearchParams();
+    if (changedBy) params.set('changedBy', changedBy);
+    const query = params.toString();
+
+    return requestJson(`${baseUrl}/engineering-requests/${requestId}/runbooks/${runbookId}${query ? `?${query}` : ''}`, {
+      method: 'DELETE'
+    });
   }
 };

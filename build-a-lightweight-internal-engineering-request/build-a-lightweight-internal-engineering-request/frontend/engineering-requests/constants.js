@@ -17,3 +17,13 @@ export const requestTypes = [
 ];
 
 export const criticalities = ['Low', 'Medium', 'High', 'Critical'];
+
+export const runbookCategories = [
+  'Deployment',
+  'Validation',
+  'DataFix',
+  'ImportExport',
+  'Infrastructure',
+  'Troubleshooting',
+  'Other'
+];

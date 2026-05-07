@@ -70,7 +70,36 @@
       </label>
 
       <section class="er-notes">
-        <h2>History</h2>
+        <h2>Linked runbooks</h2>
+        <form class="er-note-form" @submit.prevent="linkRunbook">
+          <select v-model="selectedRunbookId">
+            <option value="" disabled>Select runbook</option>
+            <option v-for="runbook in availableRunbooks" :key="runbook.id" :value="runbook.id">
+              {{ runbook.title }} ({{ runbook.systemName }} - {{ runbook.category }})
+            </option>
+          </select>
+          <div class="er-actions">
+            <input v-model.trim="linkChangedBy" placeholder="Linked by" />
+            <button type="submit" class="er-primary" :disabled="!selectedRunbookId">Link runbook</button>
+          </div>
+        </form>
+
+        <article v-for="runbook in request.linkedRunbooks" :key="runbook.id" class="er-note">
+          <p>
+            <RouterLink :to="{ name: 'runbookDetails', params: { id: runbook.runbookId } }">
+              {{ runbook.title }}
+            </RouterLink>
+          </p>
+          <span>{{ runbook.systemName }} - {{ runbook.category }} - linked {{ formatDateTime(runbook.linkedDate) }}</span>
+          <div class="er-actions er-actions--left">
+            <button type="button" @click="unlinkRunbook(runbook.runbookId)">Unlink</button>
+          </div>
+        </article>
+        <p v-if="request.linkedRunbooks.length === 0" class="er-empty">No runbooks linked yet.</p>
+      </section>
+
+      <section class="er-notes">
+        <h2>Notes</h2>
         <form class="er-note-form" @submit.prevent="addNote">
           <textarea v-model.trim="noteText" rows="3" placeholder="Add a dated progress note"></textarea>
           <div class="er-actions">
@@ -81,9 +110,9 @@
 
         <article v-for="note in request.requestNotes" :key="note.id" class="er-note">
           <p>{{ note.noteText }}</p>
-          <span>{{ note.createdBy || 'Unknown' }} · {{ formatDateTime(note.createdDate) }}</span>
+          <span>{{ note.createdBy || 'Unknown' }} - {{ formatDateTime(note.createdDate) }}</span>
         </article>
-        <p v-if="request.requestNotes.length === 0" class="er-empty">No history entries yet.</p>
+        <p v-if="request.requestNotes.length === 0" class="er-empty">No notes yet.</p>
       </section>
 
       <section class="er-notes">
@@ -102,7 +131,7 @@
               {{ attachment.fileName }}
             </a>
           </p>
-          <span>{{ attachment.uploadedBy || 'Unknown' }} · {{ formatDateTime(attachment.uploadedDate) }}</span>
+          <span>{{ attachment.uploadedBy || 'Unknown' }} - {{ formatDateTime(attachment.uploadedDate) }}</span>
         </article>
         <p v-if="request.attachments.length === 0" class="er-empty">No attachments uploaded yet.</p>
       </section>
@@ -111,7 +140,7 @@
         <h2>Timeline</h2>
         <article v-for="item in request.history" :key="item.id" class="er-note">
           <p>{{ timelineText(item) }}</p>
-          <span>{{ item.changedBy || 'System' }} · {{ formatDateTime(item.changedDate) }}</span>
+          <span>{{ item.changedBy || 'System' }} - {{ formatDateTime(item.changedDate) }}</span>
         </article>
         <p v-if="request.history.length === 0" class="er-empty">No timeline entries yet.</p>
       </section>
@@ -120,7 +149,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { engineeringRequestsApi } from '../api';
 import { priorities, requestTypes, statuses } from '../constants';
@@ -136,10 +165,13 @@ const props = defineProps({
 const router = useRouter();
 const request = ref(null);
 const systems = ref([]);
+const allRunbooks = ref([]);
 const noteText = ref('');
 const createdBy = ref('');
 const uploadedBy = ref('');
 const selectedFile = ref(null);
+const selectedRunbookId = ref('');
+const linkChangedBy = ref('');
 const error = ref('');
 
 const form = reactive({
@@ -152,6 +184,12 @@ const form = reactive({
   status: 'Incoming',
   type: 'Support',
   notes: ''
+});
+
+const availableRunbooks = computed(() => {
+  if (!request.value) return allRunbooks.value;
+  const linkedIds = new Set(request.value.linkedRunbooks.map(x => x.runbookId));
+  return allRunbooks.value.filter(x => !linkedIds.has(x.id));
 });
 
 function syncForm(data) {
@@ -171,6 +209,10 @@ function syncForm(data) {
 async function loadRequest() {
   request.value = await engineeringRequestsApi.getRequest(props.id);
   syncForm(request.value);
+}
+
+async function loadRunbooks() {
+  allRunbooks.value = await engineeringRequestsApi.getRunbooks();
 }
 
 async function saveRequest() {
@@ -216,6 +258,29 @@ async function uploadAttachment() {
   }
 }
 
+async function linkRunbook() {
+  if (!selectedRunbookId.value) return;
+
+  error.value = '';
+  try {
+    await engineeringRequestsApi.linkRunbookToRequest(props.id, Number(selectedRunbookId.value), linkChangedBy.value);
+    selectedRunbookId.value = '';
+    await loadRequest();
+  } catch (err) {
+    error.value = err.message;
+  }
+}
+
+async function unlinkRunbook(runbookId) {
+  error.value = '';
+  try {
+    await engineeringRequestsApi.unlinkRunbookFromRequest(props.id, runbookId, linkChangedBy.value);
+    await loadRequest();
+  } catch (err) {
+    error.value = err.message;
+  }
+}
+
 function attachmentUrl(id) {
   return engineeringRequestsApi.attachmentUrl(id);
 }
@@ -226,6 +291,8 @@ function timelineText(item) {
   if (item.actionType === 'AttachmentUploaded') return `Attachment uploaded: ${item.newValue || ''}`;
   if (item.actionType === 'StatusChanged') return `Status changed from ${item.oldValue} to ${item.newValue}`;
   if (item.actionType === 'PriorityChanged') return `Priority changed from ${item.oldValue} to ${item.newValue}`;
+  if (item.actionType === 'RunbookLinked') return `Runbook linked: ${item.newValue || ''}`;
+  if (item.actionType === 'RunbookUnlinked') return `Runbook unlinked: ${item.oldValue || ''}`;
   return item.actionType;
 }
 
@@ -235,6 +302,7 @@ function formatDateTime(value) {
 
 onMounted(async () => {
   systems.value = await engineeringRequestsApi.getSystems();
+  await loadRunbooks();
   await loadRequest();
 });
 </script>
@@ -264,6 +332,11 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
+}
+
+.er-actions--left {
+  justify-content: flex-start;
+  margin-top: 0.5rem;
 }
 
 h1,

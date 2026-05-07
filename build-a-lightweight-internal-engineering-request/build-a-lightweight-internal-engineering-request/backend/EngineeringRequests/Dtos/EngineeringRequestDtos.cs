@@ -31,7 +31,8 @@ public record EngineeringRequestDetailDto(
     string? Notes,
     IReadOnlyList<RequestNoteDto> RequestNotes,
     IReadOnlyList<RequestAttachmentDto> Attachments,
-    IReadOnlyList<RequestHistoryDto> History);
+    IReadOnlyList<RequestHistoryDto> History,
+    IReadOnlyList<LinkedRunbookDto> LinkedRunbooks);
 
 public record UpsertEngineeringRequestDto(
     string Title,
