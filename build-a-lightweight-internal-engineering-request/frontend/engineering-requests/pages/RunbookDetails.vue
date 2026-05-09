@@ -34,12 +34,20 @@
       </div>
 
       <label>
+        Problem
+        <textarea v-model.trim="form.problem" rows="4"></textarea>
+      </label>
+      <label>
         Symptoms
         <textarea v-model.trim="form.symptoms" rows="4"></textarea>
       </label>
       <label>
         Cause
         <textarea v-model.trim="form.cause" rows="4"></textarea>
+      </label>
+      <label>
+        Fix steps
+        <textarea v-model.trim="form.fixSteps" rows="7"></textarea>
       </label>
       <label>
         Resolution steps
@@ -97,8 +105,10 @@ const form = reactive({
   title: '',
   systemName: '',
   category: 'Troubleshooting',
+  problem: '',
   symptoms: '',
   cause: '',
+  fixSteps: '',
   resolutionSteps: '',
   verificationSteps: '',
   knownRisks: '',
@@ -110,8 +120,10 @@ function syncForm(runbook) {
     title: runbook.title,
     systemName: runbook.systemName,
     category: runbook.category,
+    problem: runbook.problem || '',
     symptoms: runbook.symptoms || '',
     cause: runbook.cause || '',
+    fixSteps: runbook.fixSteps || '',
     resolutionSteps: runbook.resolutionSteps || '',
     verificationSteps: runbook.verificationSteps || '',
     knownRisks: runbook.knownRisks || '',

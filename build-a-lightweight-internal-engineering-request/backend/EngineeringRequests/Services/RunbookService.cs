@@ -67,14 +67,17 @@ public class RunbookService<TDbContext> where TDbContext : DbContext
                 x.Title,
                 x.SystemName,
                 x.Category,
+                x.Problem,
                 x.Symptoms,
                 x.Cause,
+                x.FixSteps,
                 x.ResolutionSteps,
                 x.VerificationSteps,
                 x.KnownRisks,
                 x.Notes,
                 x.CreatedDate,
-                x.UpdatedDate))
+                x.UpdatedDate,
+                x.LastUpdated))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -86,14 +89,17 @@ public class RunbookService<TDbContext> where TDbContext : DbContext
             Title = dto.Title.Trim(),
             SystemName = dto.SystemName.Trim(),
             Category = dto.Category,
+            Problem = dto.Problem,
             Symptoms = dto.Symptoms,
             Cause = dto.Cause,
+            FixSteps = dto.FixSteps,
             ResolutionSteps = dto.ResolutionSteps,
             VerificationSteps = dto.VerificationSteps,
             KnownRisks = dto.KnownRisks,
             Notes = dto.Notes,
             CreatedDate = now,
-            UpdatedDate = now
+            UpdatedDate = now,
+            LastUpdated = now
         };
 
         Runbooks.Add(runbook);
@@ -112,13 +118,16 @@ public class RunbookService<TDbContext> where TDbContext : DbContext
         runbook.Title = dto.Title.Trim();
         runbook.SystemName = dto.SystemName.Trim();
         runbook.Category = dto.Category;
+        runbook.Problem = dto.Problem;
         runbook.Symptoms = dto.Symptoms;
         runbook.Cause = dto.Cause;
+        runbook.FixSteps = dto.FixSteps;
         runbook.ResolutionSteps = dto.ResolutionSteps;
         runbook.VerificationSteps = dto.VerificationSteps;
         runbook.KnownRisks = dto.KnownRisks;
         runbook.Notes = dto.Notes;
         runbook.UpdatedDate = DateTime.UtcNow;
+        runbook.LastUpdated = runbook.UpdatedDate;
 
         await _db.SaveChangesAsync(cancellationToken);
         return true;

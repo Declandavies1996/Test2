@@ -15,21 +15,26 @@ public record RunbookDetailDto(
     string Title,
     string SystemName,
     RunbookCategory Category,
+    string? Problem,
     string? Symptoms,
     string? Cause,
+    string? FixSteps,
     string? ResolutionSteps,
     string? VerificationSteps,
     string? KnownRisks,
     string? Notes,
     DateTime CreatedDate,
-    DateTime UpdatedDate);
+    DateTime UpdatedDate,
+    DateTime LastUpdated);
 
 public record UpsertRunbookDto(
     string Title,
     string SystemName,
     RunbookCategory Category,
+    string? Problem,
     string? Symptoms,
     string? Cause,
+    string? FixSteps,
     string? ResolutionSteps,
     string? VerificationSteps,
     string? KnownRisks,

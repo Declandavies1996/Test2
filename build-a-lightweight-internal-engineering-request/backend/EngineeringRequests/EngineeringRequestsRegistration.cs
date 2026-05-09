@@ -13,6 +13,9 @@ public static class EngineeringRequestsRegistration
         services.AddScoped<EngineeringRequestService<TDbContext>>();
         services.AddScoped<EngineeringSystemService<TDbContext>>();
         services.AddScoped<RunbookService<TDbContext>>();
+        services.AddScoped<RecurringIssueService<TDbContext>>();
+        services.AddScoped<ReleaseChangeLogService<TDbContext>>();
+        services.AddScoped<SubmissionLinkService<TDbContext>>();
         return services;
     }
 }

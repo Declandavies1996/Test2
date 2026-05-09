@@ -45,6 +45,10 @@
           <option v-for="type in requestTypes" :key="type" :value="type">{{ type }}</option>
         </select>
       </label>
+      <label class="er-check">
+        <input v-model="filters.allRequests" type="checkbox" @change="loadDashboard" />
+        All requests
+      </label>
     </section>
 
     <p v-if="error" class="er-error">{{ error }}</p>
@@ -198,7 +202,8 @@ const filters = reactive({
   system: '',
   priority: '',
   status: '',
-  type: ''
+  type: '',
+  allRequests: false
 });
 
 const cards = computed(() => dashboard.value?.cards || {
@@ -304,6 +309,12 @@ button {
   border-radius: 4px;
   padding: 0.55rem 0.65rem;
   font: inherit;
+}
+
+.er-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .er-card,

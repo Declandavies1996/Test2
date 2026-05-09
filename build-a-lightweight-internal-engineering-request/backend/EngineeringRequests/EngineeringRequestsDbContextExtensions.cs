@@ -20,10 +20,22 @@ public static class EngineeringRequestsDbContextExtensions
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
             entity.Property(x => x.Type).HasConversion<string>().HasMaxLength(30).IsRequired();
             entity.Property(x => x.Notes).HasMaxLength(4000);
+            entity.Property(x => x.OwnerUserName).HasMaxLength(256);
+            entity.Property(x => x.CreatedByUserName).HasMaxLength(256);
+            entity.Property(x => x.UpdatedByUserName).HasMaxLength(256);
+            entity.Property(x => x.SubmittedByUserName).HasMaxLength(256);
+            entity.Property(x => x.TriagedByUserName).HasMaxLength(256);
+            entity.Property(x => x.UrgencyExplanation).HasMaxLength(2000);
+            entity.Property(x => x.BusinessReason).HasMaxLength(4000);
+            entity.Property(x => x.ExpectedBehaviour).HasMaxLength(4000);
+            entity.Property(x => x.ActualBehaviour).HasMaxLength(4000);
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.Priority);
             entity.HasIndex(x => x.SystemName);
             entity.HasIndex(x => x.CreatedDate);
+            entity.HasIndex(x => x.OwnerUserName);
+            entity.HasIndex(x => x.SubmittedByUserName);
+            entity.HasIndex(x => x.RequiresTriage);
         });
 
         modelBuilder.Entity<EngineeringSystem>(entity =>
@@ -90,8 +102,10 @@ public static class EngineeringRequestsDbContextExtensions
             entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
             entity.Property(x => x.SystemName).HasMaxLength(120).IsRequired();
             entity.Property(x => x.Category).HasConversion<string>().HasMaxLength(30).IsRequired();
+            entity.Property(x => x.Problem).HasMaxLength(4000);
             entity.Property(x => x.Symptoms).HasMaxLength(4000);
             entity.Property(x => x.Cause).HasMaxLength(4000);
+            entity.Property(x => x.FixSteps).HasMaxLength(8000);
             entity.Property(x => x.ResolutionSteps).HasMaxLength(8000);
             entity.Property(x => x.VerificationSteps).HasMaxLength(4000);
             entity.Property(x => x.KnownRisks).HasMaxLength(4000);
@@ -115,6 +129,51 @@ public static class EngineeringRequestsDbContextExtensions
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.RequestId, x.RunbookId }).IsUnique();
             entity.HasIndex(x => x.RunbookId);
+        });
+
+        modelBuilder.Entity<RecurringIssue>(entity =>
+        {
+            entity.ToTable("RecurringIssues");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.SystemName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.IssueSummary).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.TemporaryFix).HasMaxLength(4000);
+            entity.Property(x => x.SuspectedRootCause).HasMaxLength(4000);
+            entity.Property(x => x.RelatedRequestIds).HasMaxLength(1000);
+            entity.HasIndex(x => x.SystemName);
+            entity.HasIndex(x => x.PermanentFixNeeded);
+        });
+
+        modelBuilder.Entity<ReleaseChangeLog>(entity =>
+        {
+            entity.ToTable("ReleaseChangeLogs");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.SystemName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Summary).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.FilesChanged).HasMaxLength(4000);
+            entity.Property(x => x.DeploymentNotes).HasMaxLength(4000);
+            entity.Property(x => x.RollbackNotes).HasMaxLength(4000);
+            entity.Property(x => x.VerifiedBy).HasMaxLength(120);
+            entity.HasOne(x => x.Request)
+                .WithMany(x => x.ReleaseChangeLogs)
+                .HasForeignKey(x => x.RequestId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(x => x.SystemName);
+            entity.HasIndex(x => x.ReleaseDate);
+            entity.HasIndex(x => x.RequestId);
+        });
+
+        modelBuilder.Entity<SubmissionLink>(entity =>
+        {
+            entity.ToTable("SubmissionLinks");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OwnerUserName).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Token).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.DisplayName).HasMaxLength(200);
+            entity.Property(x => x.CreatedByUserName).HasMaxLength(256);
+            entity.HasIndex(x => x.Token).IsUnique();
+            entity.HasIndex(x => x.OwnerUserName);
+            entity.HasIndex(x => x.IsActive);
         });
     }
 }

@@ -18,7 +18,10 @@
         <option value="">All systems</option>
         <option v-for="system in systems" :key="system.id" :value="system.name">{{ system.name }}</option>
       </select>
+      <label class="er-check"><input v-model="filters.allRequests" type="checkbox" @change="loadRequests" /> All requests</label>
     </section>
+
+    <RequestGuidance />
 
     <form v-if="editing" class="er-form" @submit.prevent="saveRequest">
       <input v-model.trim="form.title" required placeholder="Short title" />
@@ -87,6 +90,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { engineeringRequestsApi } from '../api';
 import { priorities, requestTypes, statuses } from '../constants';
+import RequestGuidance from '../components/RequestGuidance.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 
 const router = useRouter();
@@ -99,7 +103,8 @@ const error = ref('');
 const filters = reactive({
   search: '',
   status: '',
-  system: ''
+  system: '',
+  allRequests: false
 });
 
 const form = reactive({
@@ -274,5 +279,11 @@ td span {
 .er-error {
   color: #8b1d10;
   margin-bottom: 0.75rem;
+}
+
+.er-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 </style>

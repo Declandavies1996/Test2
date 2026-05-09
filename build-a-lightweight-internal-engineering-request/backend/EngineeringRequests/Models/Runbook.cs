@@ -9,14 +9,17 @@ public class Runbook
     public string Title { get; set; } = string.Empty;
     public string SystemName { get; set; } = string.Empty;
     public RunbookCategory Category { get; set; } = RunbookCategory.Other;
+    public string? Problem { get; set; }
     public string? Symptoms { get; set; }
     public string? Cause { get; set; }
+    public string? FixSteps { get; set; }
     public string? ResolutionSteps { get; set; }
     public string? VerificationSteps { get; set; }
     public string? KnownRisks { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedDate { get; set; } = DateTime.UtcNow;
+    public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
 
     public ICollection<RequestRunbook> RequestRunbooks { get; set; } = new List<RequestRunbook>();
 }

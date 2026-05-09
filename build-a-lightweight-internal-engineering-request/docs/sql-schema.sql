@@ -103,3 +103,78 @@ CREATE INDEX IX_Runbooks_UpdatedDate ON Runbooks(UpdatedDate);
 CREATE UNIQUE INDEX UX_RequestRunbooks_RequestId_RunbookId
 ON RequestRunbooks(RequestId, RunbookId);
 CREATE INDEX IX_RequestRunbooks_RunbookId ON RequestRunbooks(RunbookId);
+
+CREATE TABLE RecurringIssues (
+    Id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_RecurringIssues PRIMARY KEY,
+    SystemName nvarchar(120) NOT NULL,
+    IssueSummary nvarchar(500) NOT NULL,
+    RecurrenceCount int NOT NULL,
+    TemporaryFix nvarchar(4000) NULL,
+    SuspectedRootCause nvarchar(4000) NULL,
+    PermanentFixNeeded bit NOT NULL,
+    RelatedRequestIds nvarchar(1000) NULL,
+    CreatedDate datetime2 NOT NULL,
+    UpdatedDate datetime2 NOT NULL
+);
+
+CREATE TABLE ReleaseChangeLogs (
+    Id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_ReleaseChangeLogs PRIMARY KEY,
+    RequestId int NULL,
+    SystemName nvarchar(120) NOT NULL,
+    ReleaseDate datetime2 NOT NULL,
+    Summary nvarchar(1000) NOT NULL,
+    FilesChanged nvarchar(4000) NULL,
+    DeploymentNotes nvarchar(4000) NULL,
+    RollbackNotes nvarchar(4000) NULL,
+    VerifiedBy nvarchar(120) NULL,
+    CONSTRAINT FK_ReleaseChangeLogs_Requests_RequestId
+        FOREIGN KEY (RequestId) REFERENCES Requests(Id) ON DELETE SET NULL
+);
+
+CREATE INDEX IX_RecurringIssues_SystemName ON RecurringIssues(SystemName);
+CREATE INDEX IX_RecurringIssues_PermanentFixNeeded ON RecurringIssues(PermanentFixNeeded);
+CREATE INDEX IX_ReleaseChangeLogs_SystemName ON ReleaseChangeLogs(SystemName);
+CREATE INDEX IX_ReleaseChangeLogs_ReleaseDate ON ReleaseChangeLogs(ReleaseDate);
+CREATE INDEX IX_ReleaseChangeLogs_RequestId ON ReleaseChangeLogs(RequestId);
+
+ALTER TABLE Runbooks ADD Problem nvarchar(4000) NULL;
+ALTER TABLE Runbooks ADD FixSteps nvarchar(8000) NULL;
+ALTER TABLE Runbooks ADD LastUpdated datetime2 NOT NULL CONSTRAINT DF_Runbooks_LastUpdated DEFAULT SYSUTCDATETIME();
+
+ALTER TABLE Requests ADD OwnerUserName nvarchar(256) NULL;
+ALTER TABLE Requests ADD CreatedByUserName nvarchar(256) NULL;
+ALTER TABLE Requests ADD UpdatedByUserName nvarchar(256) NULL;
+ALTER TABLE Requests ADD SubmittedByUserName nvarchar(256) NULL;
+ALTER TABLE Requests ADD TriagedByUserName nvarchar(256) NULL;
+ALTER TABLE Requests ADD TriagedDate datetime2 NULL;
+ALTER TABLE Requests ADD IsUserSubmitted bit NOT NULL CONSTRAINT DF_Requests_IsUserSubmitted DEFAULT 0;
+ALTER TABLE Requests ADD RequiresTriage bit NOT NULL CONSTRAINT DF_Requests_RequiresTriage DEFAULT 0;
+ALTER TABLE Requests ADD UrgencyExplanation nvarchar(2000) NULL;
+ALTER TABLE Requests ADD BusinessReason nvarchar(4000) NULL;
+ALTER TABLE Requests ADD ExpectedBehaviour nvarchar(4000) NULL;
+ALTER TABLE Requests ADD ActualBehaviour nvarchar(4000) NULL;
+
+UPDATE Requests
+SET
+    OwnerUserName = COALESCE(OwnerUserName, RequestedBy, CreatedByUserName, 'Unassigned'),
+    CreatedByUserName = COALESCE(CreatedByUserName, RequestedBy, 'Unknown'),
+    UpdatedByUserName = COALESCE(UpdatedByUserName, RequestedBy, 'Unknown')
+WHERE OwnerUserName IS NULL OR CreatedByUserName IS NULL OR UpdatedByUserName IS NULL;
+
+CREATE INDEX IX_Requests_OwnerUserName ON Requests(OwnerUserName);
+CREATE INDEX IX_Requests_SubmittedByUserName ON Requests(SubmittedByUserName);
+CREATE INDEX IX_Requests_RequiresTriage ON Requests(RequiresTriage);
+
+CREATE TABLE SubmissionLinks (
+    Id int IDENTITY(1,1) NOT NULL CONSTRAINT PK_SubmissionLinks PRIMARY KEY,
+    OwnerUserName nvarchar(256) NOT NULL,
+    Token nvarchar(80) NOT NULL,
+    DisplayName nvarchar(200) NULL,
+    IsActive bit NOT NULL CONSTRAINT DF_SubmissionLinks_IsActive DEFAULT 1,
+    CreatedDate datetime2 NOT NULL,
+    CreatedByUserName nvarchar(256) NULL,
+    CONSTRAINT UX_SubmissionLinks_Token UNIQUE (Token)
+);
+
+CREATE INDEX IX_SubmissionLinks_OwnerUserName ON SubmissionLinks(OwnerUserName);
+CREATE INDEX IX_SubmissionLinks_IsActive ON SubmissionLinks(IsActive);

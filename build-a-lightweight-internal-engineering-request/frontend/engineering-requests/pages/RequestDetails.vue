@@ -69,6 +69,8 @@
         <textarea v-model.trim="form.notes" rows="4"></textarea>
       </label>
 
+      <RequestGuidance />
+
       <section class="er-notes">
         <h2>Linked runbooks</h2>
         <form class="er-note-form" @submit.prevent="linkRunbook">
@@ -153,6 +155,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { engineeringRequestsApi } from '../api';
 import { priorities, requestTypes, statuses } from '../constants';
+import RequestGuidance from '../components/RequestGuidance.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 
 const props = defineProps({
@@ -293,6 +296,12 @@ function timelineText(item) {
   if (item.actionType === 'PriorityChanged') return `Priority changed from ${item.oldValue} to ${item.newValue}`;
   if (item.actionType === 'RunbookLinked') return `Runbook linked: ${item.newValue || ''}`;
   if (item.actionType === 'RunbookUnlinked') return `Runbook unlinked: ${item.oldValue || ''}`;
+  if (item.actionType === 'UserSubmitted') return `User submitted request: ${item.newValue || ''}`;
+  if (item.actionType === 'RequestTriaged') return 'Request triaged';
+  if (item.actionType === 'SystemAssigned') return `System assigned from ${item.oldValue || 'blank'} to ${item.newValue || 'blank'}`;
+  if (item.actionType === 'PriorityAssigned') return `Priority assigned from ${item.oldValue} to ${item.newValue}`;
+  if (item.actionType === 'TypeAssigned') return `Type assigned from ${item.oldValue} to ${item.newValue}`;
+  if (item.actionType === 'OwnerAssigned') return `Owner assigned from ${item.oldValue || 'blank'} to ${item.newValue || 'blank'}`;
   return item.actionType;
 }
 

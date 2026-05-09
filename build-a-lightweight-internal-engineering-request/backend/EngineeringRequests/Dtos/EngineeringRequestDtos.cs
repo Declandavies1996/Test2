@@ -14,7 +14,11 @@ public record EngineeringRequestListItemDto(
     RequestStatus Status,
     RequestType Type,
     DateTime CreatedDate,
-    DateTime UpdatedDate);
+    DateTime UpdatedDate,
+    string? OwnerUserName,
+    string? SubmittedByUserName,
+    bool IsUserSubmitted,
+    bool RequiresTriage);
 
 public record EngineeringRequestDetailDto(
     int Id,
@@ -29,6 +33,18 @@ public record EngineeringRequestDetailDto(
     DateTime CreatedDate,
     DateTime UpdatedDate,
     string? Notes,
+    string? OwnerUserName,
+    string? CreatedByUserName,
+    string? UpdatedByUserName,
+    string? SubmittedByUserName,
+    string? TriagedByUserName,
+    DateTime? TriagedDate,
+    bool IsUserSubmitted,
+    bool RequiresTriage,
+    string? UrgencyExplanation,
+    string? BusinessReason,
+    string? ExpectedBehaviour,
+    string? ActualBehaviour,
     IReadOnlyList<RequestNoteDto> RequestNotes,
     IReadOnlyList<RequestAttachmentDto> Attachments,
     IReadOnlyList<RequestHistoryDto> History,
@@ -43,6 +59,37 @@ public record UpsertEngineeringRequestDto(
     RequestPriority Priority,
     RequestStatus Status,
     RequestType Type,
+    string? Notes,
+    string? OwnerUserName,
+    string? BusinessReason,
+    string? ExpectedBehaviour,
+    string? ActualBehaviour,
+    string? UrgencyExplanation);
+
+public class SubmitEngineeringRequestDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? BusinessReason { get; set; }
+    public string? ExpectedBehaviour { get; set; }
+    public string? ActualBehaviour { get; set; }
+    public string? SuggestedSystemName { get; set; }
+    public string? UrgencyExplanation { get; set; }
+    public string? Department { get; set; }
+}
+
+public record SubmitEngineeringRequestResultDto(
+    int Id,
+    string Title,
+    DateTime SubmittedDate,
+    string SubmittedByUserName);
+
+public record TriageEngineeringRequestDto(
+    string SystemName,
+    RequestPriority Priority,
+    RequestStatus Status,
+    RequestType Type,
+    string? OwnerUserName,
     string? Notes);
 
 public record RequestNoteDto(
